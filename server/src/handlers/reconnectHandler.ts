@@ -68,4 +68,33 @@ class ReconnectHandler {
           const reconnectToken = uuidv4();
           await redisService.setReconnectToken(disconnectedPlayer.id, reconnectToken);
           
-          // У
+          // Уведомляем других игроков об отключении
+          socket.to(room.id).emit('player:disconnected', { 
+            playerId: disconnectedPlayer.id,
+            playerName: disconnectedPlayer.username
+          });
+          
+          // Если игра активна, устанавливаем таймер на автопоражение
+          if (room.gameState) {
+            setTimeout(async () => {
+              // Проверяем, переподключился ли игрок
+              const currentSocketId = await redisService.getPlayerSession(disconnectedPlayer.id);
+              if (!currentSocketId || currentSocketId === socket.id) {
+                // Игрок не переподключился - завершаем игру
+                socket.to(room.id).emit('player:timeout', { 
+                  playerId: disconnectedPlayer.id 
+                });
+              }
+            }, 60000); // 60 секунд на переподключение
+          }
+          
+          break;
+        }
+      }
+    } catch (error) {
+      console.error('Disconnect handling error:', error);
+    }
+  }
+}
+
+export const reconnectHandler = new ReconnectHandler();
